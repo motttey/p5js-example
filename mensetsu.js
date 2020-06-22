@@ -33,25 +33,25 @@ let sketch = function(p) {
 
     let deskCreatedFlag = false;
     let deskSp;
-    while (!deskCreatedFlag) {
-      deskSp = p.createSprite();
-      const d_x = p.random(p.width);
-      const d_y = p.random(p.height);
+    //while (!deskCreatedFlag) {
+    deskSp = p.createSprite();
+    const d_x = p.random(p.width);
+    const d_y = p.random(p.height);
+    const d_size = 50 + p.random(p.width/2);
 
-      deskSp.draw = function() {
-        p.strokeWeight(1);
-        p.stroke(0,0,0);
-        p.rect(x1, y1, 50 + p.random(p.width/2), 50, 0);
-      }
+    deskCreatedFlag = true;
+    deskSp.setCollider('circle', d_x, d_y, circle_size/2);
 
-      deskCreatedFlag = true;
-
-      deskSp.overlap(studentSp, new function(){
-        deskSp.remove();
-        deskCreatedFlag = false;
-      });
+    deskSp.draw = function() {
+      p.strokeWeight(1);
+      p.stroke(0,0,0);
+      p.rect(x1, y1, d_size, 50, 0);
     }
 
+    deskSp.overlap(studentSp, new function(){
+      deskSp.remove();
+      deskCreatedFlag = false;
+    });
 
     p.rect(x1, y1, 50 + p.random(p.width/2), 50, 0);
     console.log(p.random(2));
@@ -76,15 +76,14 @@ let sketch = function(p) {
 
       professorSp.overlap(professors, (professor, overlapped) => {
         overlapped.remove();
-        console.log("removed");
       });
 
-      professorSp.overlap(studentSp, new function(){
-        professorSp.remove();
+      professorSp.overlap(studentSp, (professor, overlapped) =>{
+        overlapped.remove();
       });
 
-      professorSp.overlap(desk, new function(){
-        professorSp.remove();
+      professorSp.overlap(deskSp, (professor, overlapped) =>{
+        overlapped.remove();
       });
 
       professors.add(professorSp);
