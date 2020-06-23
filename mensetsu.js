@@ -41,8 +41,8 @@ let sketch = function(p) {
     }
 
     deskSp.setCollider('rectangle', d_x, d_y, d_size, 50);
-    deskSp.mouseActive = true;
-    deskSp.debug = true;
+    // deskSp.mouseActive = true;
+    // deskSp.debug = true;
 
     deskSp.overlap(studentSp, (professor, overlapped) =>{
       overlapped.remove();
@@ -64,6 +64,7 @@ let sketch = function(p) {
       }
 
       professorSp.setCollider('circle', x, y, circle_size/2);
+      professors.add(professorSp);
 
       professorSp.overlap(professors, (professor, overlapped) => {
         overlapped.remove();
@@ -76,10 +77,26 @@ let sketch = function(p) {
       professorSp.overlap(deskSp, (professor, overlapped) =>{
         overlapped.remove();
       });
-
-      professors.add(professorSp);
     }
     p.drawSprites();
+
+    p.fill(255, 255, 255);
+    p.rect(650, 450, 200, 150);
+
+    p.fill(255, 165, 0);
+    p.circle(690, 525, 16);
+
+    p.fill(135, 206, 235);
+    p.circle(690, 555, 16);
+
+    p.fill(222, 184, 135);
+    p.rect(660, 485, 50, 20);
+
+    p.fill(0, 0, 0);
+    p.textSize(16);
+    p.text('机', 750, 500);
+    p.text('面接官', 750, 530);
+    p.text('受験者', 750, 560);
 
   }
   p.draw = function(){
