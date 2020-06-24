@@ -1,18 +1,15 @@
 const circle_size = 50;
 let students;
 let professors;
-
-function collide(spriteA, spriteB) {
-}
+let deskSp, studentSp;
 
 let sketch = function(p) {
   p.setup = function(){
-    // createCanvas(600,425);
     p.createCanvas(1000, 600);
     p.background(255, 255, 255);
     p.angleMode(p.DEGREES);
 
-    let studentSp = p.createSprite();
+    studentSp = p.createSprite();
 
     const s_x = p.random(p.width);
     const s_y = p.random(p.height);
@@ -24,10 +21,10 @@ let sketch = function(p) {
       p.ellipse(s_x, s_y, circle_size, circle_size);
     }
 
-    studentSp.setCollider('circle', s_x, s_y, circle_size/2);
+    // studentSp.setCollider('circle', s_x, s_y, circle_size/2);
 
     let deskCreatedFlag = false;
-    let deskSp = p.createSprite();
+    deskSp = p.createSprite();
 
     const d_x = p.random(p.width);
     const d_y = p.random(p.height);
@@ -42,7 +39,7 @@ let sketch = function(p) {
 
     deskSp.setCollider('rectangle', d_x, d_y, d_size, 50);
     // deskSp.mouseActive = true;
-    // deskSp.debug = true;
+    deskSp.debug = true;
 
     deskSp.overlap(studentSp, (professor, overlapped) =>{
       overlapped.remove();
@@ -65,41 +62,56 @@ let sketch = function(p) {
 
       professorSp.setCollider('circle', x, y, circle_size/2);
       professors.add(professorSp);
+      professorSp.debug = true;
 
       professorSp.overlap(professors, (professor, overlapped) => {
+        // console.log("collision");
+        professor.remove();
+      });
+
+      deskSp.overlap(professors, (professor, overlapped) =>{
+        console.log("collision");
         overlapped.remove();
       });
 
-      professorSp.overlap(studentSp, (professor, overlapped) =>{
-        overlapped.remove();
-      });
-
-      professorSp.overlap(deskSp, (professor, overlapped) =>{
-        overlapped.remove();
-      });
     }
+    deskSp.collide(studentSp);
     p.drawSprites();
 
+    const info_x = 650;
+    const info_y = 450;
+
     p.fill(255, 255, 255);
-    p.rect(650, 450, 200, 150);
+    p.rect(info_x, info_y, 200, 150);
 
     p.fill(255, 165, 0);
-    p.circle(690, 525, 16);
+    p.circle(info_x + 40, info_y + 75, 16);
 
     p.fill(135, 206, 235);
-    p.circle(690, 555, 16);
+    p.circle(info_x + 40, info_y + 105, 16);
 
     p.fill(222, 184, 135);
-    p.rect(660, 485, 50, 20);
+    p.rect(info_x + 10, info_y + 35, 50, 20);
 
     p.fill(0, 0, 0);
     p.textSize(16);
-    p.text('机', 750, 500);
-    p.text('面接官', 750, 530);
-    p.text('受験者', 750, 560);
-
+    p.text('机', info_x + 100, info_y + 50);
+    p.text('面接官', info_x + 100, info_y + 80);
+    p.text('受験者', info_x + 100, info_y + 110);
   }
   p.draw = function(){
+    deskSp.overlap(professors, (desk, overlapped) => {
+      console.log("collision");
+      desk.collide(overlapped);
+    });
+    /*
+    studentSp.overlap(professors, (student, overlapped) => {
+      console.log("collision");
+      overlapped.collide(student);
+    });
+    */
+    deskSp.collide(studentSp);
+    p.drawSprites();
   }
 }
 new p5(sketch, 'container');
