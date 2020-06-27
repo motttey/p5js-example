@@ -39,7 +39,7 @@ let sketch = function(p) {
 
     deskSp.setCollider('rectangle', d_x, d_y, d_size, 50);
     // deskSp.mouseActive = true;
-    deskSp.debug = true;
+    // deskSp.debug = true;
 
     deskSp.overlap(studentSp, (professor, overlapped) =>{
       overlapped.remove();
@@ -47,7 +47,7 @@ let sketch = function(p) {
 
     professors = new p.Group();
 
-    for (let i = 0; i < p.random(20); i++) {
+    for (let i = 0; i < p.random(100); i++) {
       // let professor = p.circle(p.random(p.width), p.random(p.height), circle_size);
       let professorSp = p.createSprite();
       const x = p.random(p.width);
@@ -62,16 +62,16 @@ let sketch = function(p) {
 
       professorSp.setCollider('circle', x, y, circle_size/2);
       professors.add(professorSp);
-      professorSp.debug = true;
+      // professorSp.debug = true;
 
       professorSp.overlap(professors, (professor, overlapped) => {
         // console.log("collision");
         professor.remove();
       });
 
-      deskSp.overlap(professors, (professor, overlapped) =>{
+      professors.overlap(deskSp, (professor, desk) =>{
         console.log("collision");
-        overlapped.remove();
+        professor.remove();
       });
 
     }
@@ -100,16 +100,18 @@ let sketch = function(p) {
     p.text('受験者', info_x + 100, info_y + 110);
   }
   p.draw = function(){
-    deskSp.overlap(professors, (desk, overlapped) => {
+    professors.collide(deskSp, (professor, desk) => {
       console.log("collision");
-      desk.collide(overlapped);
+      professor.remove();
     });
+
     /*
     studentSp.overlap(professors, (student, overlapped) => {
       console.log("collision");
       overlapped.collide(student);
     });
     */
+
     deskSp.collide(studentSp);
     p.drawSprites();
   }
