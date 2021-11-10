@@ -3,9 +3,14 @@ const white_size = 250;
 const yellow_circle_size = 50;
 const red_circle_size = 75;
 
+let startTIme;
+let elapsedTime;
+
 let sketch = function(p) {
   p.setup = function(){
     // createCanvas(600,425);
+    startTIme = p.millis();
+
     p.createCanvas(1000, 1000);
     p.background(255,255,255);
   }
@@ -31,7 +36,14 @@ let sketch = function(p) {
     p.square(p.random(p.width),p.random(p.height),p.random(blue_size));
     p.circle(p.random(p.width),p.random(p.height),p.random(blue_size));
 
-    p.filter(p.BLUR, 5)
+    const now = p.millis();
+    elapsedTime = now - startTIme;
+
+    // 1秒ごとにblur
+    if (elapsedTime >= 3000) {
+      p.filter(p.BLUR, 2);
+      startTime = p.millis();
+    }
   }
 }
 new p5(sketch, 'container');
