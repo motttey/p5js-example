@@ -6,13 +6,28 @@ const red_circle_size = 75;
 let startTIme;
 let elapsedTime;
 
+
 let sketch = function(p) {
+
+  function setContext(){
+      let xv = Math.abs(Math.sin(elapsedTime/100))*50
+      p.drawingContext.shadowBlur = 100;
+      p.drawingContext.shadowColor = p.color(255,255,0);
+  }
+
+  async function blur() {
+    p.filter(p.BLUR, 1);
+  }
+
   p.setup = function(){
     // createCanvas(600,425);
     startTIme = p.millis();
 
     p.createCanvas(1000, 1000);
     p.background(255,255,255);
+
+    p.drawingContext.shadowBlur = 100;
+    p.drawingContext.shadowColor = p.color(255,255,255);
   }
 
   // フレームごとの処理
@@ -25,6 +40,7 @@ let sketch = function(p) {
     p.circle(p.random(p.width),p.random(p.height),p.random(white_size));
 
     p.fill(255,255,0);
+    p.drawingContext.shadowColor = p.color(255,255,0);
     p.circle(p.random(p.width),p.random(p.height),p.random(yellow_circle_size));
 
     // p.strokeWeight(1);
@@ -32,17 +48,19 @@ let sketch = function(p) {
     p.circle(p.random(p.width),p.random(p.height),p.random(red_circle_size));
 
     p.fill(0,188,214);
+    p.drawingContext.shadowColor = p.color(0,188,214);
     p.square(p.random(p.width),p.random(p.height),p.random(blue_size));
     p.square(p.random(p.width),p.random(p.height),p.random(blue_size));
     p.circle(p.random(p.width),p.random(p.height),p.random(blue_size));
+    
+    p.drawingContext.shadowColor = p.color(255,255,255);
 
     const now = p.millis();
     elapsedTime = now - startTIme;
 
     // 1秒ごとにblur
     if (elapsedTime >= 3000) {
-      p.filter(p.BLUR, 2);
-      startTime = p.millis();
+      // (async () => console.log(await blur()))()
     }
   }
 }
