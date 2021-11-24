@@ -2,6 +2,7 @@ const blue_size = 120;
 const white_size = 250;
 const yellow_circle_size = 50;
 const red_circle_size = 75;
+const opacity_max = 127;
 
 let startTIme;
 let elapsedTime;
@@ -36,19 +37,21 @@ let sketch = function(p) {
     p.strokeWeight(0);
 
     p.fill(255,255,255);
-    p.square(p.random(p.width),p.random(p.height),p.random(white_size));
+    // p.square(p.random(p.width),p.random(p.height),p.random(white_size));
+    p.ellipse(p.random(p.width),p.random(p.height),p.random(white_size), p.random(white_size));
     p.circle(p.random(p.width),p.random(p.height),p.random(white_size));
 
-    p.fill(240,240,0);
-    p.drawingContext.shadowColor = p.color(255,255,0);
+    p.fill(240,240,0,p.random(opacity_max));
+    p.drawingContext.shadowColor = p.color(240,240,0);
     p.circle(p.random(p.width),p.random(p.height),p.random(yellow_circle_size));
 
-    p.fill(240,25,50);
+    p.fill(240,25,50,p.random(opacity_max));
     p.circle(p.random(p.width),p.random(p.height),p.random(red_circle_size));
 
-    p.fill(0,188,214);
+    p.fill(0,188,214,p.random(opacity_max));
     p.drawingContext.shadowColor = p.color(0,188,214);
-    p.square(p.random(p.width),p.random(p.height),p.random(blue_size));
+    // p.square(p.random(p.width),p.random(p.height),p.random(blue_size));
+    p.ellipse(p.random(p.width),p.random(p.height),p.random(blue_size), p.random(blue_size));
     p.circle(p.mouseX, p.mouseY, 100);
 
     p.circle(p.random(p.width),p.random(p.height),p.random(blue_size));
