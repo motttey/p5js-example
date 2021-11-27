@@ -2,10 +2,10 @@ const blue_size = 120;
 const white_size = 250;
 const yellow_circle_size = 50;
 const red_circle_size = 75;
+const red_circle_size_list = [200, 350, 100, 50, 600];
 const opacity_max = 127;
 
-let red_circle_pos;
-
+let red_circle_pos_list = [];
 let startTIme;
 let elapsedTime;
 
@@ -32,7 +32,9 @@ let sketch = function(p) {
     p.drawingContext.shadowBlur = 100;
     p.drawingContext.shadowColor = p.color(255,255,255);
 
-    red_circle_pos = [p.random(p.width), p.random(p.height)]
+    red_circle_size_list.forEach((item, i) => {
+      red_circle_pos_list.push([p.random(p.width), p.random(p.height)])
+    });
   }
 
   // フレームごとの処理
@@ -58,11 +60,14 @@ let sketch = function(p) {
     p.fill(0,188,214,p.random(opacity_max));
     p.drawingContext.shadowColor = p.color(0,188,214);
     // p.square(p.random(p.width),p.random(p.height),p.random(blue_size));
-    p.circle(
-      red_circle_size * Math.sin(elapsedTime % Math.PI*2) + red_circle_pos[0],
-      red_circle_size * Math.cos(elapsedTime % Math.PI*2) + red_circle_pos[1],
-      p.random(red_circle_size)
-    );
+
+    red_circle_size_list.forEach((item, i) => {
+      p.circle(
+        item * Math.sin(elapsedTime % Math.PI*2) + red_circle_pos_list[i][0],
+        item * Math.cos(elapsedTime % Math.PI*2) + red_circle_pos_list[i][1],
+        p.random(red_circle_size) + 20
+      );
+    });
 
     p.ellipse(p.random(p.width),p.random(p.height),p.random(blue_size), p.random(blue_size));
     p.circle(p.mouseX, p.mouseY, 100);
