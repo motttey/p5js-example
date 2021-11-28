@@ -41,14 +41,20 @@ let sketch = function(p) {
   p.draw = function(){
     const now = p.millis();
     elapsedTime = now - startTIme;
-    //着色
     p.strokeWeight(0);
 
     p.fill(255,255,255);
     // p.square(p.random(p.width),p.random(p.height),p.random(white_size));
-    p.ellipse(p.random(p.width),p.random(p.height),p.random(white_size), p.random(white_size));
-    p.circle(p.random(p.width),p.random(p.height),p.random(white_size));
+    // p.ellipse(p.random(p.width),p.random(p.height),p.random(white_size), p.random(white_size));
 
+    const eye_pos = [p.random(p.width), p.random(p.height)]
+    p.strokeWeight(1);
+    p.circle(eye_pos[0],eye_pos[1],p.random(white_size));
+
+    p.fill(0,0,0);
+    p.circle(eye_pos[0] + p.random(5) + p.random(5), eye_pos[1],5);
+
+    p.strokeWeight(0);
     p.fill(240,240,0,p.random(opacity_max));
     p.drawingContext.shadowColor = p.color(240,240,0);
     p.circle(p.random(p.width),p.random(p.height),p.random(yellow_circle_size));
