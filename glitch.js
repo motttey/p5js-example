@@ -1,5 +1,7 @@
 const width = 1000;
 const height = 600;
+
+let libs = ["includes/libs/p5.glitch.js"];
 let glitch = new Glitch();
 
 let sketch = function(p) {
@@ -8,16 +10,20 @@ let sketch = function(p) {
     p.createCanvas(1000, 600);
     p.background(255,255,255);
 
-    glitch.loadType('jpg'); // specify jpeg file glitching, default
-    glitch.loadQuality(.25); // optionally crunch to low quality
-    glitch.loadImage('rakuimon2.jpg'); // load image by path
+    p.loadImage('rakuimon2.jpg', function(img){
+      glitch.loadType('jpg');
+      glitch.loadQuality(.25);
+      glitch.loadImage('./rakuimon2.jpg');
 
-    glitch.randomBytes(10); // randomize 10 bytes
-    glitch.replaceBytes(45, 127); // find + replace all
-    glitch.replaceHex('ffdb00430001','ffdb004300ff'); // jpg quant table
+    	glitch.loadImage(img);
 
-    glitch.buildImage(); // creates image from glitched data
-    p.image(glitch.image, 0, 0); // display glitched image
+      glitch.randomBytes(10);
+      glitch.replaceBytes(45, 127);
+      glitch.replaceHex('ffdb00430001','ffdb004300ff');
+
+      glitch.buildImage();
+      p.image(glitch.image, 0, 0);
+    });
   }
 
   // フレームごとの処理
