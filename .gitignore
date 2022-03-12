@@ -1,3 +1,6 @@
 .DS_Store
 Thumbs.db
 p5.play.js
+
+*.png
+*.jpg
