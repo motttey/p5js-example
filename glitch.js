@@ -30,7 +30,7 @@ let sketch = function(p) {
     p.background(0);
     p.image(img, -shift_size, 0);
 
-    for(let i=0;i<100;i++){
+    for(let i = 0; i < 100; i++){
       let sx = p.random(img.width * 0.5);
       let sy = p.random(img.height * 0.5);
       let x = p.random(img.width - sx * 0.5);
@@ -48,26 +48,11 @@ let sketch = function(p) {
   }
 
   p.setup = function(){
-    // createCanvas(600,425);
     p.createCanvas(1000, 1000);
     p.background(255,255,255);
 
     p.loadImage('./rakuimon2.jpg', function(img){
-      /*
-      glitch.loadType('jpg');
-      glitch.loadQuality(.25);
-      glitch.loadImage('./rakuimon2.jpg');
-
-    	glitch.loadImage(img);
-
-      glitch.randomBytes(10);
-      glitch.replaceBytes(45, 127);
-      glitch.replaceHex('ffdb00430001','ffdb004300ff');
-
-      glitch.buildImage();
-      */
       image = img;
-      // p.image(image);
     });
   }
 
