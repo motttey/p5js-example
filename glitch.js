@@ -47,15 +47,6 @@ let sketch = function(p) {
     return img_glitch;
   }
 
-  p.setup = function(){
-    p.createCanvas(1000, 1000);
-    p.background(255,255,255);
-
-    p.loadImage('./internetdora.jpg', function(img){
-      image = img;
-    });
-  }
-
   function draw_noise (img) {
     p.background(0);
     p.image(img, 0, 0);
@@ -79,6 +70,39 @@ let sketch = function(p) {
 
     return img_noise;
   }
+
+  const builder = function(img) {
+    this._img = img;
+  }
+
+  builder.prototype = {
+    // 文字連結
+    draw_color_glitch: function(shift_size) {
+      this._img = draw_color_glitch(this._img, shift_size);
+      return this;
+    },
+    draw_shift_glitch: function(shift_size) {
+      this._img = draw_shift_glitch(this._img, shift_size);
+      return this;
+    },
+    draw_noise: function() {
+      this._img = draw_noise(this._img);
+      return this;
+    },
+    draw_img: function () {
+      p.image(this._img, 0, 0);
+    }
+  }
+
+  p.setup = function(){
+    p.createCanvas(1000, 1000);
+    p.background(255,255,255);
+
+    p.loadImage('./internetdora.jpg', function(img){
+      image = img;
+    });
+  }
+
   // フレームごとの処理
   p.draw = function(){
     //着色
@@ -86,11 +110,11 @@ let sketch = function(p) {
 
     if (image != null) {
       // p.fill(255,255,255);
-      const img_shift = draw_shift_glitch(image, p.random(25));
-      const img_color_shift = draw_color_glitch(img_shift, p.random(5));
-      const img_color_shift_noise = draw_noise(img_color_shift);
-
-      p.image(img_color_shift_noise, 0, 0);
+      const result = new builder(image)
+        .draw_shift_glitch(p.random(25))
+        .draw_color_glitch(p.random(5))
+        .draw_noise()
+        .draw_img();
     }
   }
 }
