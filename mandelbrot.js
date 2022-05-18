@@ -6,7 +6,7 @@ let sketch = function(p) {
   p.setup = function(){
     p.createCanvas(width, height);
     p.pixelDensity(1);
-    // p.noLoop();
+    p.noLoop();
   }
 
   // フレームごとの処理
@@ -17,11 +17,11 @@ let sketch = function(p) {
     // A different range will allow us to "zoom" in or out on the fractal
 
     // It all starts with the width, try higher or lower values
-    const w = 4;
+    const w = 3;
     const h = (w * height) / width;
 
     // Start at negative half the width and height
-    const xmin = -w/2;
+    const xmin = -w/1.5;
     const ymin = -h/2;
 
     // Make sure we can write to the pixels[] array.
@@ -29,7 +29,7 @@ let sketch = function(p) {
     p.loadPixels();
 
     // Maximum number of iterations for each point on the complex plane
-    maxiterations = p.random(100) + 50;
+    maxiterations = p.random(100) + 300;
 
     // x goes from xmin to xmax
     const xmax = xmin + w;
@@ -63,20 +63,38 @@ let sketch = function(p) {
           }
           n++;
         }
-
         // We color each pixel based on how long it takes to get to infinity
         // If we never got there, let's pick the color black
         const pix = (i+j*width)*4;
         const norm = p.map(n, 0, maxiterations, 0, 1);
-        let bright = p.map(p.sqrt(norm), 0, 1, 0, 255);
+        let bright = p.map(p.sqrt(norm), 0, 1, 1, 255);
         if (n == maxiterations) {
           bright = 0;
         } else {
-          // Gosh, we could make fancy colors here if we wanted
-          p.pixels[pix + 0] = bright;
-          p.pixels[pix + 1] = bright;
-          p.pixels[pix + 2] = bright;
-          p.pixels[pix + 3] = 255;
+          // darken center colors
+          if (n > 25) {
+            p.pixels[pix + 0] = 0;
+            p.pixels[pix + 1] = 0;
+            p.pixels[pix + 2] = 0;
+            p.pixels[pix + 3] = 255;
+          } else {
+            let rand = p.random(1);
+            if (Math.floor(bright * 100) % 3 == 1) {
+              // Gosh, we could make fancy colors here if we wanted
+              p.pixels[pix + 0] = 0;
+              p.pixels[pix + 1] = 188;
+              p.pixels[pix + 2] = 214;
+            } else if (Math.floor(bright) % 3 == 0) {
+              p.pixels[pix + 0] = 255;
+              p.pixels[pix + 1] = 255;
+              p.pixels[pix + 2] = 0;
+            } else {
+              p.pixels[pix + 0] = 255;
+              p.pixels[pix + 1] = 0;
+              p.pixels[pix + 2] = 0;
+            }
+            p.pixels[pix + 3] = 128;
+          }
         }
         x += dx;
       }
