@@ -1,10 +1,11 @@
 const height = 700;
 const width = 700;
 let maxiterations = 100;
+let canvas;
 
 let sketch = function(p) {
   p.setup = function(){
-    p.createCanvas(width, height);
+    canvas =p.createCanvas(width, height);
     p.pixelDensity(1);
     p.noLoop();
   }
@@ -101,6 +102,8 @@ let sketch = function(p) {
       y += dy;
     }
     p.updatePixels();
+
+    p.saveCanvas(canvas, 'canvas', 'jpg');
   }
 }
 new p5(sketch, 'container');
