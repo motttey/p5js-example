@@ -1,5 +1,5 @@
-const height = 700;
-const width = 700;
+const height = 2000;
+const width = 2000;
 let maxiterations = 100;
 let canvas;
 
@@ -30,7 +30,7 @@ let sketch = function(p) {
     p.loadPixels();
 
     // Maximum number of iterations for each point on the complex plane
-    maxiterations = p.random(100) + 300;
+    maxiterations = p.random(100) + 500;
 
     // x goes from xmin to xmax
     const xmax = xmin + w;
@@ -94,7 +94,7 @@ let sketch = function(p) {
               p.pixels[pix + 1] = 0;
               p.pixels[pix + 2] = 0;
             }
-            p.pixels[pix + 3] = 128;
+            p.pixels[pix + 3] = 255;
           }
         }
         x += dx;
