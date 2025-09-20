@@ -4,3 +4,5 @@ p5.play.js
 
 *.png
 *.jpg
+
+.vscode/
