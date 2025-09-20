@@ -1,0 +1,206 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>p5.js Tie-Dye</title>
+  <style>
+    html,
+    body {
+      height: 100%;
+      margin: 0;
+      background: #000;
+      color: #fff;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+    }
+    #ui {
+      position: fixed;
+      inset: 12px 12px auto auto;
+      background: rgba(0, 0, 0, .45);
+      padding: 12px;
+      border-radius: 12px;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+    }
+    #ui h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      letter-spacing: .02em;
+      opacity: .95;
+    }
+    #ui .row {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 8px;
+      align-items: center;
+      margin: 6px 0;
+      font-size: 12px;
+    }
+    #ui input[type=range] {
+      width: 180px;
+    }
+    #ui .hint {
+      font-size: 11px;
+      opacity: .8;
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+    canvas {
+      display: block;
+    }
+  </style>
+  <script src="https://unpkg.com/p5@1.9.3/lib/p5.min.js"></script>
+</head>
+<body>
+  <div id="ui">
+    <h3>Tie‑Dye Controls</h3>
+    <div class="row"><span>Bands</span><input id="bands" type="range" min="2" max="40" step="0.1" value="14"></div>
+    <div class="row"><span>Swirl</span><input id="swirl" type="range" min="-3" max="3" step="0.01" value="1.2"></div>
+    <div class="row"><span>Warp</span><input id="warp" type="range" min="0" max="2" step="0.01" value="0.55"></div>
+    <div class="row"><span>Speed</span><input id="speed" type="range" min="-3" max="3" step="0.01" value="0.6"></div>
+    <div class="row"><span>Saturation</span><input id="sat" type="range" min="0" max="1" step="0.01" value="0.95"></div>
+    <div class="row"><span>Brightness</span><input id="bri" type="range" min="0" max="1.2" step="0.01" value="0.95"></div>
+    <div class="row"><span>Rotation</span><input id="rot" type="range" min="-3.1416" max="3.1416" step="0.001" value="0"></div>
+    <div class="row"><span>Grain</span><input id="grain" type="range" min="0" max="0.2" step="0.001" value="0.03"></div>
+    <div class="hint">ドラッグ: 中心移動 / ホイール: ズーム / [S] 保存 / [H] UI切替</div>
+  </div>
+  <script>
+    let theShader, center, zoom = 1;
+
+    const vert = `#version 300 es
+    precision highp float;
+    in vec3 aPosition;
+    out vec2 vUv;
+    void main(){
+      vUv = (aPosition.xy + 1.0) * 0.5; // 0..1
+      gl_Position = vec4(aPosition, 1.0);
+    }`;
+
+    const frag = `#version 300 es
+    precision highp float;
+    out vec4 fragColor;
+    in vec2 vUv;
+
+    uniform vec2 iResolution;
+    uniform float iTime;
+    uniform vec2 iCenter;   // 0..1
+    uniform float iZoom;    // 1 = そのまま
+    uniform float uBands;   // リング密度
+    uniform float uSwirl;   // 渦の強さ
+    uniform float uWarp;    // ドメインワープ量
+    uniform float uSpeed;   // アニメ速度
+    uniform float uSat;     // 彩度
+    uniform float uBri;     // 輝度
+    uniform float uGrain;   // 粒子
+    uniform float uRot;     // 回転
+
+    // 乱数と簡易ノイズ
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+    float noise(vec2 p){
+      vec2 i = floor(p); vec2 f = fract(p);
+      float a = hash(i);
+      float b = hash(i + vec2(1.0, 0.0));
+      float c = hash(i + vec2(0.0, 1.0));
+      float d = hash(i + vec2(1.0, 1.0));
+      vec2 u = f*f*(3.0-2.0*f);
+      return mix(a, b, u.x) + (c - a)*u.y*(1.0 - u.x) + (d - b)*u.x*u.y;
+    }
+    float fbm(vec2 p){
+      float v = 0.0; float a = 0.5; mat2 m = mat2(1.6,1.2,-1.2,1.6);
+      for(int i=0;i<5;i++){ v += a*noise(p); p = m*p; a *= 0.5; }
+      return v;
+    }
+
+    vec3 hsv2rgb(vec3 c){
+      vec3 p = abs(fract(c.xxx + vec3(0., 2./6., 4./6.)) * 6. - 3.);
+      return c.z * mix(vec3(1.), clamp(p - 1., 0., 1.), c.y);
+    }
+
+    void main(){
+      // 正規化座標（中心/ズーム/回転）
+      vec2 uv = (vUv - 0.5) / iZoom;
+      float s = sin(uRot), c = cos(uRot);
+      uv = mat2(c,-s,s,c) * uv;
+      uv += (0.5 - iCenter); // 中心移動
+
+      // ドメインワープで染料のにじみ感
+      float t = iTime * uSpeed;
+      vec2 w1 = vec2(fbm(uv*2.5 + t), fbm(uv*2.5 - t));
+      vec2 w2 = vec2(fbm(uv*3.5 - t*0.6), fbm(uv*3.5 + t*0.6));
+      uv += uWarp * (w1*0.7 + w2*0.3 - 0.5);
+
+      // タイダイ: 半径と角度でサイン波を重ねリングを生成
+      float r = length(uv) * 2.2;              // スケール
+      float a = atan(uv.y, uv.x);
+      float phase = r*uBands + uSwirl*a;
+      float v1 = 0.5 + 0.5*sin(phase - t*1.2);
+      float v2 = 0.5 + 0.5*sin(phase*0.5 + t*0.9 + r*3.0);
+      float v3 = 0.5 + 0.5*sin(phase*1.5 - t*0.7 + a*2.0);
+      float mixv = clamp(0.4*v1 + 0.35*v2 + 0.25*v3, 0.0, 1.0);
+
+      // 彩色：位相から色相へ、濃淡はmixvで
+      float hue = fract(0.15*phase/6.28318 + 0.08*sin(r*2.0) + t*0.03);
+      float sat = uSat * (0.85 + 0.15*v2);
+      float bri = uBri * mix(0.55, 1.0, mixv);
+      vec3 col = hsv2rgb(vec3(hue, sat, bri));
+
+      fragColor = vec4(col, 1.0);
+    }`;
+
+    function setup(){
+      createCanvas(windowWidth, windowHeight, WEBGL);
+      noStroke();
+      theShader = createShader(vert, frag);
+      shader(theShader);
+      center = createVector(0.5, 0.5);
+    }
+
+    function draw(){
+      shader(theShader);
+      theShader.setUniform('iResolution', [windowWidth, windowHeight]);
+      theShader.setUniform('iTime', millis()/1000);
+      theShader.setUniform('iCenter', [center.x, center.y]);
+      theShader.setUniform('iZoom', zoom);
+      theShader.setUniform('uBands', parseFloat(document.getElementById('bands').value));
+      theShader.setUniform('uSwirl', parseFloat(document.getElementById('swirl').value));
+      theShader.setUniform('uWarp',  parseFloat(document.getElementById('warp').value));
+      theShader.setUniform('uSpeed', parseFloat(document.getElementById('speed').value));
+      theShader.setUniform('uSat',   parseFloat(document.getElementById('sat').value));
+      theShader.setUniform('uBri',   parseFloat(document.getElementById('bri').value));
+      theShader.setUniform('uGrain', parseFloat(document.getElementById('grain').value));
+      theShader.setUniform('uRot',   parseFloat(document.getElementById('rot').value));
+
+      beginShape();
+      vertex(-1, -1);
+      vertex(1, -1);
+      vertex(1, 1);
+      vertex(-1, 1);
+      endShape(CLOSE);
+    }
+
+    function windowResized(){
+      resizeCanvas(windowWidth, windowHeight);
+    }
+
+    function mouseDragged(){
+      const x = constrain(mouseX / width, 0, 1);
+      const y = constrain(mouseY / height, 0, 1);
+      center.set(x, y);
+    }
+
+    function mouseWheel(e){
+      const s = 1 - e.deltaY * 0.001;
+      zoom = constrain(zoom * s, 0.4, 3.0);
+      return false;
+    }
+
+    function keyPressed(){
+      if(key === 'S' || key === 's') saveCanvas('tie-dye', 'png');
+      if(key === 'H' || key === 'h'){
+        const ui = document.getElementById('ui');
+        ui.style.display = ui.style.display === 'none' ? '' : 'none';
+      }
+    }
+  </script>
+</body>
+</html>
