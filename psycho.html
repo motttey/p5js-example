@@ -5,8 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <title>p5.js Tie-Dye</title>
   <style>
-    html,
-    body {
+    html, body {
       height: 100%;
       margin: 0;
       background: #000;
@@ -21,6 +20,7 @@
       border-radius: 12px;
       backdrop-filter: blur(6px);
       box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+      z-index: 1001;
     }
     #ui h3 {
       margin: 0 0 8px;
@@ -36,24 +36,36 @@
       margin: 6px 0;
       font-size: 12px;
     }
-    #ui input[type=range] {
-      width: 180px;
-    }
+    #ui input[type=range] { width: 180px; }
     #ui .hint {
       font-size: 11px;
       opacity: .8;
       margin-top: 6px;
       line-height: 1.4;
     }
-    canvas {
-      display: block;
+    canvas { display: block; }
+
+    /* アップロード画像の前面オーバーレイ */
+    #overlay {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 1000;             /* キャンバスの前面に表示 */
+      max-width: 70vw;           /* 画面に収まるように調整可 */
+      max-height: 70vh;
+      user-select: none;
+      -webkit-user-drag: none;
+      cursor: grab;
+      pointer-events: auto;
     }
+    #overlay.dragging { cursor: grabbing; }
   </style>
   <script src="https://unpkg.com/p5@1.9.3/lib/p5.min.js"></script>
 </head>
 <body>
   <div id="ui">
-    <h3>Tie‑Dye Controls</h3>
+    <h3>Tie-Dye Controls</h3>
     <div class="row"><span>Bands</span><input id="bands" type="range" min="2" max="40" step="0.1" value="14"></div>
     <div class="row"><span>Swirl</span><input id="swirl" type="range" min="-3" max="3" step="0.01" value="1.2"></div>
     <div class="row"><span>Warp</span><input id="warp" type="range" min="0" max="2" step="0.01" value="0.55"></div>
@@ -62,17 +74,21 @@
     <div class="row"><span>Brightness</span><input id="bri" type="range" min="0" max="1.2" step="0.01" value="0.95"></div>
     <div class="row"><span>Rotation</span><input id="rot" type="range" min="-3.1416" max="3.1416" step="0.001" value="0"></div>
     <div class="row"><span>Grain</span><input id="grain" type="range" min="0" max="0.2" step="0.001" value="0.03"></div>
+
+    <div class="row"><span>画像アップロード</span><input id="imgfile" type="file" accept="image/*"></div>
     <div class="hint">ドラッグ: 中心移動 / ホイール: ズーム / [S] 保存 / [H] UI切替</div>
   </div>
+
   <script>
     let theShader, center, zoom = 1;
+    let isDraggingOverlay = false;
 
     const vert = `#version 300 es
     precision highp float;
     in vec3 aPosition;
     out vec2 vUv;
     void main(){
-      vUv = (aPosition.xy + 1.0) * 0.5; // 0..1
+      vUv = (aPosition.xy + 1.0) * 0.5;
       gl_Position = vec4(aPosition, 1.0);
     }`;
 
@@ -83,18 +99,17 @@
 
     uniform vec2 iResolution;
     uniform float iTime;
-    uniform vec2 iCenter;   // 0..1
-    uniform float iZoom;    // 1 = そのまま
-    uniform float uBands;   // リング密度
-    uniform float uSwirl;   // 渦の強さ
-    uniform float uWarp;    // ドメインワープ量
-    uniform float uSpeed;   // アニメ速度
-    uniform float uSat;     // 彩度
-    uniform float uBri;     // 輝度
-    uniform float uGrain;   // 粒子
-    uniform float uRot;     // 回転
+    uniform vec2 iCenter;
+    uniform float iZoom;
+    uniform float uBands;
+    uniform float uSwirl;
+    uniform float uWarp;
+    uniform float uSpeed;
+    uniform float uSat;
+    uniform float uBri;
+    uniform float uGrain;
+    uniform float uRot;
 
-    // 乱数と簡易ノイズ
     float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
     float noise(vec2 p){
       vec2 i = floor(p); vec2 f = fract(p);
@@ -110,27 +125,22 @@
       for(int i=0;i<5;i++){ v += a*noise(p); p = m*p; a *= 0.5; }
       return v;
     }
-
     vec3 hsv2rgb(vec3 c){
       vec3 p = abs(fract(c.xxx + vec3(0., 2./6., 4./6.)) * 6. - 3.);
       return c.z * mix(vec3(1.), clamp(p - 1., 0., 1.), c.y);
     }
-
     void main(){
-      // 正規化座標（中心/ズーム/回転）
       vec2 uv = (vUv - 0.5) / iZoom;
       float s = sin(uRot), c = cos(uRot);
       uv = mat2(c,-s,s,c) * uv;
-      uv += (0.5 - iCenter); // 中心移動
+      uv += (0.5 - iCenter);
 
-      // ドメインワープで染料のにじみ感
       float t = iTime * uSpeed;
       vec2 w1 = vec2(fbm(uv*2.5 + t), fbm(uv*2.5 - t));
       vec2 w2 = vec2(fbm(uv*3.5 - t*0.6), fbm(uv*3.5 + t*0.6));
       uv += uWarp * (w1*0.7 + w2*0.3 - 0.5);
 
-      // タイダイ: 半径と角度でサイン波を重ねリングを生成
-      float r = length(uv) * 2.2;              // スケール
+      float r = length(uv) * 2.2;
       float a = atan(uv.y, uv.x);
       float phase = r*uBands + uSwirl*a;
       float v1 = 0.5 + 0.5*sin(phase - t*1.2);
@@ -138,12 +148,10 @@
       float v3 = 0.5 + 0.5*sin(phase*1.5 - t*0.7 + a*2.0);
       float mixv = clamp(0.4*v1 + 0.35*v2 + 0.25*v3, 0.0, 1.0);
 
-      // 彩色：位相から色相へ、濃淡はmixvで
       float hue = fract(0.15*phase/6.28318 + 0.08*sin(r*2.0) + t*0.03);
       float sat = uSat * (0.85 + 0.15*v2);
       float bri = uBri * mix(0.55, 1.0, mixv);
       vec3 col = hsv2rgb(vec3(hue, sat, bri));
-
       fragColor = vec4(col, 1.0);
     }`;
 
@@ -153,6 +161,16 @@
       theShader = createShader(vert, frag);
       shader(theShader);
       center = createVector(0.5, 0.5);
+
+      // ファイルアップロード処理
+      const fileInput = document.getElementById('imgfile');
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        if(!file) return;
+        const reader = new FileReader();
+        reader.onload = () => mountOverlayImage(reader.result);
+        reader.readAsDataURL(file);
+      });
     }
 
     function draw(){
@@ -178,11 +196,11 @@
       endShape(CLOSE);
     }
 
-    function windowResized(){
-      resizeCanvas(windowWidth, windowHeight);
-    }
+    function windowResized(){ resizeCanvas(windowWidth, windowHeight); }
 
+    // タイダイ中心移動（ただし画像ドラッグ中は無効）
     function mouseDragged(){
+      if(isDraggingOverlay) return; // 画像ドラッグを優先
       const x = constrain(mouseX / width, 0, 1);
       const y = constrain(mouseY / height, 0, 1);
       center.set(x, y);
@@ -195,11 +213,97 @@
     }
 
     function keyPressed(){
-      if(key === 'S' || key === 's') saveCanvas('tie-dye', 'png');
+      if(key === 'S' || key === 's') saveCanvas('tie-dye', 'png'); // キャンバス単体保存（画像は別レイヤー）
       if(key === 'H' || key === 'h'){
         const ui = document.getElementById('ui');
         ui.style.display = ui.style.display === 'none' ? '' : 'none';
       }
+    }
+
+    function mountOverlayImage(src){
+      // 既存があれば削除
+      const old = document.getElementById('overlay');
+      if(old && old.parentNode) old.parentNode.removeChild(old);
+
+      const img = document.createElement('img');
+      img.id = 'overlay';
+      img.src = src;
+      document.body.appendChild(img);
+
+      // 初期位置は中央（CSSでtranslate済み）
+      enableDrag(img);
+    }
+
+    function enableDrag(el){
+      let dragging = false;
+      let startX = 0, startY = 0;
+      let offsetX = 0, offsetY = 0;
+
+      const start = (clientX, clientY) => {
+        const rect = el.getBoundingClientRect();
+        dragging = true;
+        isDraggingOverlay = true;
+        el.classList.add('dragging');
+
+        // translateを解除してピクセル固定に切り替え
+        const left = rect.left;
+        const top = rect.top;
+        el.style.transform = 'none';
+        el.style.left = left + 'px';
+        el.style.top = top + 'px';
+
+        startX = clientX;
+        startY = clientY;
+        offsetX = clientX - left;
+        offsetY = clientY - top;
+      };
+
+      const move = (clientX, clientY) => {
+        if(!dragging) return;
+        const newLeft = clientX - offsetX;
+        const newTop  = clientY - offsetY;
+        el.style.left = newLeft + 'px';
+        el.style.top  = newTop  + 'px';
+      };
+
+      const end = () => {
+        if(!dragging) return;
+        dragging = false;
+        isDraggingOverlay = false;
+        el.classList.remove('dragging');
+      };
+
+      // マウス
+      el.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        start(e.clientX, e.clientY);
+      });
+      window.addEventListener('mousemove', (e) => {
+        if(!dragging) return;
+        e.preventDefault();
+        move(e.clientX, e.clientY);
+      }, { passive: false });
+      window.addEventListener('mouseup', (e) => { end(); });
+
+      // タッチ
+      el.addEventListener('touchstart', (e) => {
+        if(!e.touches || e.touches.length === 0) return;
+        const t = e.touches[0];
+        e.preventDefault();
+        e.stopPropagation();
+        start(t.clientX, t.clientY);
+      }, { passive: false });
+      window.addEventListener('touchmove', (e) => {
+        if(!dragging || !e.touches || e.touches.length === 0) return;
+        const t = e.touches[0];
+        e.preventDefault();
+        move(t.clientX, t.clientY);
+      }, { passive: false });
+      window.addEventListener('touchend', (e) => { end(); });
+
+      // ブラウザデフォルトの画像ドラッグを抑止
+      el.addEventListener('dragstart', (e) => e.preventDefault());
     }
   </script>
 </body>
