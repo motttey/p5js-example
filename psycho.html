@@ -12,6 +12,7 @@
       color: #fff;
       font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
     }
+
     #ui {
       position: fixed;
       inset: 12px 12px auto auto;
@@ -22,12 +23,14 @@
       box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
       z-index: 1001;
     }
+
     #ui h3 {
       margin: 0 0 8px;
       font-size: 14px;
       letter-spacing: .02em;
       opacity: .95;
     }
+
     #ui .row {
       display: grid;
       grid-template-columns: 120px 1fr;
@@ -36,30 +39,33 @@
       margin: 6px 0;
       font-size: 12px;
     }
+
     #ui input[type=range] { width: 180px; }
+
     #ui .hint {
       font-size: 11px;
       opacity: .8;
       margin-top: 6px;
       line-height: 1.4;
     }
-    canvas { display: block; }
 
-    /* アップロード画像の前面オーバーレイ */
     #overlay {
       position: fixed;
       left: 50%;
       top: 50%;
       transform: translate(-50%, -50%);
-      z-index: 1000;             /* キャンバスの前面に表示 */
-      max-width: 70vw;           /* 画面に収まるように調整可 */
+      z-index: 1000;
+      max-width: 70vw;
       max-height: 70vh;
       user-select: none;
       -webkit-user-drag: none;
       cursor: grab;
       pointer-events: auto;
     }
-    #overlay.dragging { cursor: grabbing; }
+
+    #overlay.dragging { 
+      cursor: grabbing; 
+    }
   </style>
   <script src="https://unpkg.com/p5@1.9.3/lib/p5.min.js"></script>
 </head>
@@ -198,9 +204,8 @@
 
     function windowResized(){ resizeCanvas(windowWidth, windowHeight); }
 
-    // タイダイ中心移動（ただし画像ドラッグ中は無効）
     function mouseDragged(){
-      if(isDraggingOverlay) return; // 画像ドラッグを優先
+      if(isDraggingOverlay) return;
       const x = constrain(mouseX / width, 0, 1);
       const y = constrain(mouseY / height, 0, 1);
       center.set(x, y);
@@ -213,7 +218,7 @@
     }
 
     function keyPressed(){
-      if(key === 'S' || key === 's') saveCanvas('tie-dye', 'png'); // キャンバス単体保存（画像は別レイヤー）
+      if(key === 'S' || key === 's') saveCanvas('tie-dye', 'png');
       if(key === 'H' || key === 'h'){
         const ui = document.getElementById('ui');
         ui.style.display = ui.style.display === 'none' ? '' : 'none';
@@ -221,7 +226,6 @@
     }
 
     function mountOverlayImage(src){
-      // 既存があれば削除
       const old = document.getElementById('overlay');
       if(old && old.parentNode) old.parentNode.removeChild(old);
 
@@ -230,7 +234,6 @@
       img.src = src;
       document.body.appendChild(img);
 
-      // 初期位置は中央（CSSでtranslate済み）
       enableDrag(img);
     }
 
@@ -245,7 +248,6 @@
         isDraggingOverlay = true;
         el.classList.add('dragging');
 
-        // translateを解除してピクセル固定に切り替え
         const left = rect.left;
         const top = rect.top;
         el.style.transform = 'none';
@@ -286,7 +288,6 @@
       }, { passive: false });
       window.addEventListener('mouseup', (e) => { end(); });
 
-      // タッチ
       el.addEventListener('touchstart', (e) => {
         if(!e.touches || e.touches.length === 0) return;
         const t = e.touches[0];
@@ -302,7 +303,6 @@
       }, { passive: false });
       window.addEventListener('touchend', (e) => { end(); });
 
-      // ブラウザデフォルトの画像ドラッグを抑止
       el.addEventListener('dragstart', (e) => e.preventDefault());
     }
   </script>
