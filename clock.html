@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <title>p5.js Clock</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/p5.js/1.9.3/p5.min.js"></script>
+  <style>
+    body {
+        margin: 0;
+        background: #e9eaec;
+        font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto;
+    }
+    .ui { 
+        position: fixed;
+        left: 16px;
+        top: 16px;
+        background: rgba(255,255,255,.8);
+        padding: 10px 12px;
+        border-radius: 10px;
+        box-shadow: 0 6px 18px rgba(0,0,0,.15);
+    }
+    .ui input { 
+        padding: 6px 8px;
+        width: 200px;
+    }
+    .ui button { 
+        margin-left: 6px;
+        padding: 6px 10px;
+    }
+  </style>
+</head>
+<body>
+  <div class="ui">
+    <div style="margin-bottom:6px;">指定日時（例: 2025-10-27 14:35:00）</div>
+    <input id="datetime" type="datetime-local" />
+    <button id="applyBtn">設定</button>
+    <button id="toggleBtn">⏸ 時計を停止</button>
+    <button id="resetBtn">現在時刻に戻す</button>
+  </div>
+
+  <script>
+    let isRunning = true;
+    let simDate = null;
+    let faceR = 160;
+
+    function setup() {
+      createCanvas(560, 640);
+      angleMode(DEGREES);
+
+      // UI wiring
+      const dateInput = document.getElementById('dateInput');
+
+      document.getElementById("applyBtn").onclick = () => {
+        const val = document.getElementById("datetime").value;
+        if (!val) return alert("日時を入力してください。");
+        const d = new Date(val);
+        if (isNaN(d)) return alert("日付の形式が正しくありません。");
+        simDate = d;
+        isRunning = false;
+        document.getElementById("toggleBtn").textContent = "▶ 時計を再開";
+      };
+
+      document.getElementById('toggleBtn').onclick = () => {
+        isRunning = !isRunning;
+        document.getElementById('toggleBtn').textContent = isRunning ? '⏸ 時計を停止' : '▶ 時計を再開';
+        if (!simDate) simDate = new Date();
+      };
+
+      document.getElementById('resetBtn').onclick = () => {
+        simDate = null;
+        isRunning = true;
+        document.getElementById('toggleBtn').textContent = '⏸ 時計を停止';
+      };
+    }
+
+    function draw() {
+      drawWallBackground();
+
+      // 掛け時計の落ち影
+      noStroke();
+      fill(0, 0, 0, 25);
+
+      // 時計本体の縁
+      push();
+      translate(width/2, height/2 + 30);
+
+      // 外周の縁
+      strokeWeight(20);
+      stroke(210);
+      fill(246);
+      circle(0, 0, faceR*2 + 20);
+
+      // 内側の薄い縁
+      strokeWeight(2);
+      stroke(230);
+      circle(0, 0, faceR*2 - 6);
+
+      // 目盛（先に描画）
+      rotate(-90);
+      drawTicks();
+
+      let now = getNow();
+
+      const hr = now.getHours();
+      const mn = now.getMinutes();
+      const sc = now.getSeconds() + now.getMilliseconds()/1000;
+
+      const aSec = map(sc, 0, 60, 0, 360);
+      const aMin = map(mn + sc / 60, 0, 60, 0, 360);
+      const aHour = map((hr % 12) + mn / 60 + sc/3600, 0, 12, 0, 360);
+
+      // 時針
+      push();
+      rotate(aHour);
+      stroke(70);
+      strokeWeight(8);
+      line(0, 0, faceR*0.45, 0);
+      pop();
+
+      // 分針
+      push();
+      rotate(aMin);
+      stroke(80, 120, 210);
+      strokeWeight(6);
+      line(0, 0, faceR*0.62, 0);
+      pop();
+
+      // 秒針
+      push();
+      rotate(aSec);
+      stroke(220, 70, 70);
+      strokeWeight(3);
+      line(-12, 0, faceR*0.70, 0); // お尻を少し伸ばす
+      pop();
+
+      // 中心キャップ
+      noStroke();
+      fill(30);
+      circle(0, 0, 10);
+
+      rotate(90);
+      drawNumbers();
+
+      pop();
+
+      drawDigital(getNow());
+    }
+
+    function getNow() {
+      if (simDate) {
+        if (isRunning) {
+          simDate = new Date(simDate.getTime() + deltaTime);
+        }
+        return simDate;
+      }
+      return new Date();
+    }
+
+    function drawTicks() {
+      for (let i = 0; i < 60; i++) {
+        const isHour = (i % 5 === 0);
+        stroke(isHour ? 60 : 120);
+        strokeWeight(isHour ? 3.5 : 1.5);
+        const len = isHour ? 14 : 7;
+        line(faceR - 20, 0, faceR - 20 - len, 0);
+        rotate(6);
+      }
+    }
+
+    function drawNumbers() {
+      textAlign(CENTER, CENTER);
+      // 余分な線が出るのを防止
+      noStroke();
+      fill(30);
+      textSize(28);
+      const r = faceR - 52;
+      for (let i = 1; i <= 12; i++) {
+        const ang = (i * 30) - 90;
+        const x = cos(ang) * r;
+        const y = sin(ang) * r;
+        text(i, Math.round(x), Math.round(y));
+      }
+    }
+
+    function drawWallBackground() {
+      const g = drawingContext.createLinearGradient(0, 0, 0, height);
+      g.addColorStop(0, '#f2f3f6');
+      g.addColorStop(1, '#e2e3e7');
+      drawingContext.fillStyle = g;
+      noStroke();
+      rect(0, 0, width, height);
+
+      drawingContext.save();
+      drawingContext.globalAlpha = 0.06;
+      const stripeW = 16;
+      for (let x = 0; x < width; x += stripeW) {
+        fill(255);
+        rect(x, 0, stripeW/2, height);
+      }
+      drawingContext.restore();
+    }
+
+    function drawDigital(d) {
+      const h = nf(d.getHours(), 2);
+      const m = nf(d.getMinutes(), 2);
+      const s = nf(d.getSeconds(), 2);
+      fill(30);
+      noStroke();
+      textAlign(CENTER, CENTER);
+      textSize(22);
+      text(`${h}:${m}:${s}`, width/2, height - 28);
+    }
+  </script>
+</body>
+</html>
