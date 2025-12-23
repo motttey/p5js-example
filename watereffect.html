@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Realistic Perspective Water with Rain</title>
+  <style>
+    html, body { 
+        height: 100%;
+        margin: 0;
+        background: #050a10;
+        color: #fff;
+        font-family: sans-serif;
+        overflow: hidden; 
+    }
+
+    #ui {
+      position: fixed;
+      inset: 12px 12px auto auto;
+      background: rgba(0, 0, 0, .85);
+      padding: 16px;
+      border-radius: 12px;
+      backdrop-filter: blur(10px);
+      z-index: 1001;
+      width: 260px;
+      border: 1px solid rgba(255,255,255,0.1);
+    }
+    
+    #ui h3 { 
+        margin: 0 0 12px;
+        font-size: 14px;
+        border-bottom: 1px solid #444;
+        padding-bottom: 5px;
+    }
+    
+    #ui .row { 
+        display: grid;
+        grid-template-columns: 90px 1fr;
+        gap: 8px;
+        align-items: center;
+        margin: 8px 0;
+        font-size: 11px;
+    }
+
+    #ui input[type=range] { width: 100%; }
+    
+    .hint {
+        font-size: 10px;
+        opacity: 0.7;
+        margin-top: 10px;
+        line-height: 1.4;
+    }
+  </style>
+  <script src="https://unpkg.com/p5@1.9.3/lib/p5.min.js"></script>
+</head>
+<body>
+  <div id="ui">
+    <h3>Water Reality Controls</h3>
+    <div class="row">
+        <span>Distortion</span>
+        <input id="strength" type="range" min="0" max="0.3" step="0.001" value="0.08">
+    </div>
+    <div class="row">
+        <span>Complexity</span>
+        <input id="freq" type="range" min="1" max="50" step="1" value="12">
+    </div>
+    <div class="row">
+        <span>Speed</span>
+        <input id="speed" type="range" min="0" max="3" step="0.1" value="0.8">
+    </div>
+    <div class="row">
+        <span>Turbulence</span>
+        <input id="turb" type="range" min="0" max="1" step="0.01" value="0.5">
+    </div>
+    <div class="row">
+        <span>Brightness</span>
+        <input id="bright" type="range" min="0.5" max="2.0" step="0.01" value="1.0">
+    </div>
+    <div class="row">
+        <span>Rain Amount</span>
+        <input id="rainAmount" type="range" min="0" max="0.02" step="0.0001" value="0.005">
+    </div>
+    <div class="row">
+        <span>Deep Blue</span>
+        <input id="deepBlue" type="range" min="0" max="1" step="0.01" value="0.6">
+    </div>
+    
+    <div class="row">
+        <span>Image</span>
+        <input id="imgfile" type="file" accept="image/*">
+    </div>
+    <div class="hint">[S] 保存 / [H] UI切替</div>
+  </div>
+
+  <script>
+    let theShader, img;
+
+    const vert = `#version 300 es
+    precision highp float;
+    in vec3 aPosition;
+    in vec2 aTexCoord;
+    out vec2 vUv;
+    void main() {
+      // p5.jsのテクスチャ座標は左上が(0,0), 右下が(1,1)
+      // gl_Positionは左下が(-1,-1), 右上が(1,1)なので、vUvを反転させる必要はない。
+      // もし画像が上下逆に出る場合、vUv.y = 1.0 - aTexCoord.y; のように調整
+      vUv = aTexCoord; 
+      gl_Position = vec4(aPosition.x * 2.0 - 1.0, aPosition.y * 2.0 - 1.0, aPosition.z, 1.0);
+    }`;
+
+    // --- 高機能水面シェーダ ---
+    const frag = `#version 300 es
+    precision highp float;
+    out vec4 fragColor;
+    in vec2 vUv;
+
+    uniform sampler2D uTexture;
+    uniform float iTime;
+    uniform float uStrength;
+    uniform float uFreq;
+    uniform float uSpeed;
+    uniform float uTurb;
+    uniform float uBright;
+    uniform float uRainAmount;
+    uniform float uDeepBlue;
+    uniform bool uHasTexture;
+
+    // 擬似乱数
+    float hash(vec2 p) {
+      return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123);
+    }
+
+    // 2Dバリューノイズ
+    float noise(vec2 p) {
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      f = f * f * (3.0 - 2.0 * f);
+      float a = hash(i);
+      float b = hash(i + vec2(1.0, 0.0));
+      float c = hash(i + vec2(0.0, 1.0));
+      float d = hash(i + vec2(1.0, 1.0));
+      return mix(mix(a, b, f.x), mix(c, d, f.x), f.y);
+    }
+
+    // フラクタルブラウン運動 (不規則なうねり)
+    float fbm(vec2 p) {
+      float v = 0.0;
+      float a = 0.5;
+      // より多くのオクターブで複雑に
+      for (int i = 0; i < 4; i++) { 
+        v += a * noise(p);
+        p *= 2.0;
+        a *= 0.5;
+      }
+      return v;
+    }
+
+    // 雨の波紋関数
+    float rainRipple(vec2 uv, float t, float rippleFreq) {
+        // 複数のランダムな雨粒の位置をシミュレート
+        vec2 p = floor(uv * rippleFreq);
+        float r = 0.0;
+        for (int i = 0; i < 4; i++) { // 4つの雨粒を重ねる
+            vec2 rainPos = hash(p + float(i)) * vec2(1.0, 1.0);
+            float dist = length(uv * rippleFreq - (p + rainPos));
+            // 時間経過で波紋が広がり、消えていく
+            float wave = sin(dist * 10.0 - t * 10.0) / (dist * 5.0 + 1.0);
+            r += max(0.0, wave * (1.0 - fract(t * 0.3 + float(i) * 0.2))); // 消えるアニメーション
+        }
+        return r * 0.1; // 雨の波紋の強さ調整
+    }
+
+
+    void main() {
+      float p_y = vUv.y; // 遠近感用 (0.0:上 -> 1.0:下)
+      float t = iTime * uSpeed;
+
+      // 1. 水面座標の計算 (横方向に引き伸ばしてリアルな比率にする)
+      // vUv.x を 2.0 倍、vUv.y を uFreq 倍することで、横長で複雑な波紋にする
+      vec2 waterUv = vec2(vUv.x * 2.0, vUv.y * uFreq); 
+      
+      // 2. 複数のノイズを合成して「揺らぎ」を生成
+      float n = fbm(waterUv + vec2(t * 0.5, t * 0.2));
+      float n2 = fbm(waterUv - vec2(t * 0.3, -t * 0.4));
+      
+      // 3. 歪みベクトルの作成 (不規則性を混ぜる)
+      float distortion = mix(n, n2, uTurb);
+      
+      vec2 offset = vec2(
+        (distortion - 0.5) * uStrength * p_y * 2.5, // 横方向の歪みを強く
+        (distortion - 0.5) * uStrength * p_y * 0.8  // 縦方向の歪みは控えめに
+      );
+
+      // --- 雨の波紋をオフセットに加算 ---
+      offset += rainRipple(vUv, iTime, uFreq * 0.5) * uRainAmount;
+
+      vec2 finalUv = clamp(vUv + offset, 0.0, 1.0);
+
+      if(uHasTexture) {
+        vec4 tex = texture(uTexture, finalUv);
+        vec3 col = tex.rgb * uBright;
+        float spec = pow(abs(distortion), 15.0) * p_y; // 遠くほど反射が弱まる
+        col += spec * 0.3; // 反射の強さ
+
+        vec3 deepBlueColor = vec3(0.0, 0.1, 0.3) * uDeepBlue;
+        col = mix(col, deepBlueColor, 1.0 - p_y * 0.6);
+        
+        fragColor = vec4(col, 1.0);
+      } else {
+        fragColor = vec4(0.01, 0.02, 0.05, 1.0);
+      }
+    }`;
+
+    function setup() {
+      createCanvas(windowWidth, windowHeight, WEBGL);
+      noStroke();
+      theShader = createShader(vert, frag);
+
+      img = createImage(1, 1);
+      img.set(0, 0, color(10, 20, 40));
+      img.updatePixels();
+
+      const fileInput = document.getElementById('imgfile');
+      fileInput.addEventListener('change', (e) => {
+        const file = e.target.files[0];
+        if (file) {
+          const url = URL.createObjectURL(file);
+          loadImage(url, (loadedImg) => { img = loadedImg; });
+        }
+      });
+    }
+
+    function draw() {
+      shader(theShader);
+      theShader.setUniform('uTexture', img);
+      theShader.setUniform('iTime', millis() / 1000.0);
+      theShader.setUniform('uStrength', parseFloat(document.getElementById('strength').value));
+      theShader.setUniform('uFreq', parseFloat(document.getElementById('freq').value));
+      theShader.setUniform('uSpeed', parseFloat(document.getElementById('speed').value));
+      theShader.setUniform('uTurb', parseFloat(document.getElementById('turb').value));
+      theShader.setUniform('uBright', parseFloat(document.getElementById('bright').value));
+      theShader.setUniform('uRainAmount', parseFloat(document.getElementById('rainAmount').value));
+      theShader.setUniform('uDeepBlue', parseFloat(document.getElementById('deepBlue').value));
+      theShader.setUniform('uHasTexture', true);
+      rect(0, 0, width, height);
+    }
+
+    function windowResized() { resizeCanvas(windowWidth, windowHeight); }
+    function keyPressed() {
+      if (key === 'S' || key === 's') saveCanvas('realistic-water-rain', 'png');
+      if (key === 'H' || key === 'h') {
+        const ui = document.getElementById('ui');
+        ui.style.display = ui.style.display === 'none' ? '' : 'none';
+      }
+    }
+  </script>
+</body>
+</html>
