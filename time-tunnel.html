@@ -1,0 +1,481 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Time Machine Space (p5.js)</title>
+  <style>
+    html, body {
+      height: 100%;
+      margin: 0;
+      background: #000;
+      color: #fff;
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial;
+      overflow: hidden;
+    }
+
+    #ui {
+      position: fixed;
+      inset: 12px 12px auto auto;
+      background: rgba(0, 0, 0, .45);
+      padding: 12px;
+      border-radius: 12px;
+      backdrop-filter: blur(6px);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, .35);
+      z-index: 1001;
+      user-select: none;
+    }
+
+    #ui h3 {
+      margin: 0 0 8px;
+      font-size: 14px;
+      letter-spacing: .02em;
+      opacity: .95;
+    }
+
+    #ui .row {
+      display: grid;
+      grid-template-columns: 120px 1fr;
+      gap: 8px;
+      align-items: center;
+      margin: 6px 0;
+      font-size: 12px;
+    }
+
+    #ui input[type=range] { width: 200px; }
+    #ui .hint {
+      font-size: 11px;
+      opacity: .8;
+      margin-top: 8px;
+      line-height: 1.4;
+    }
+  </style>
+  <script src="https://unpkg.com/p5@1.9.3/lib/p5.min.js"></script>
+</head>
+<body>
+  <div id="ui">
+    <h3>Time Machine Space</h3>
+    <div class="row"><span>Fly Speed</span><input id="fly" type="range" min="0" max="3" step="0.01" value="1.35"></div>
+    <div class="row"><span>Swirl</span><input id="swirl" type="range" min="-6" max="6" step="0.01" value="2.25"></div>
+    <div class="row"><span>Warp</span><input id="warp" type="range" min="0" max="2.5" step="0.01" value="0.9"></div>
+    <div class="row"><span>Rays</span><input id="rays" type="range" min="0" max="2" step="0.01" value="1.05"></div>
+    <div class="row"><span>Fog</span><input id="fog" type="range" min="0" max="2" step="0.01" value="1.0"></div>
+    <div class="row"><span>Hue Shift</span><input id="hue" type="range" min="-1" max="1" step="0.001" value="0.1"></div>
+    <div class="row"><span>Fragments</span><input id="frags" type="range" min="0" max="80" step="1" value="38"></div>
+    <div class="row"><span>Zoom</span><input id="zoom" type="range" min="0.55" max="2.4" step="0.001" value="1.0"></div>
+    <div class="row"><span>Rotation</span><input id="rot" type="range" min="-3.1416" max="3.1416" step="0.001" value="0"></div>
+    <div class="hint">ドラッグ: 中心移動 / ホイール: ズーム / [S] 保存 / [H] UI切替</div>
+  </div>
+
+  <script>
+    let tunnelShader;
+    let center;
+    let zoom = 1.0;
+    let clockFrags = [];
+    let stars = [];
+
+    const vert = `#version 300 es
+    precision highp float;
+    in vec3 aPosition;
+    out vec2 vUv;
+    void main(){
+      vUv = (aPosition.xy + 1.0) * 0.5;
+      gl_Position = vec4(aPosition, 1.0);
+    }`;
+
+    // “時間のトンネル”っぽい渦＋雲＋光条
+    const frag = `#version 300 es
+    precision highp float;
+    out vec4 fragColor;
+    in vec2 vUv;
+
+    uniform vec2 iResolution;
+    uniform float iTime;
+    uniform vec2 iCenter;
+    uniform float iZoom;
+    uniform float uFly;
+    uniform float uSwirl;
+    uniform float uWarp;
+    uniform float uRays;
+    uniform float uFog;
+    uniform float uHue;
+    uniform float uRot;
+
+    float hash(vec2 p){ return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453123); }
+    float noise(vec2 p){
+      vec2 i = floor(p);
+      vec2 f = fract(p);
+      float a = hash(i);
+      float b = hash(i + vec2(1.0, 0.0));
+      float c = hash(i + vec2(0.0, 1.0));
+      float d = hash(i + vec2(1.0, 1.0));
+      vec2 u = f*f*(3.0-2.0*f);
+      return mix(a, b, u.x) + (c - a)*u.y*(1.0 - u.x) + (d - b)*u.x*u.y;
+    }
+    float fbm(vec2 p){
+      float v = 0.0;
+      float a = 0.5;
+      mat2 m = mat2(1.6,1.2,-1.2,1.6);
+      for(int i=0;i<6;i++){
+        v += a*noise(p);
+        p = m*p;
+        a *= 0.5;
+      }
+      return v;
+    }
+    vec3 hsv2rgb(vec3 c){
+      vec3 p = abs(fract(c.xxx + vec3(0., 2./6., 4./6.)) * 6. - 3.);
+      return c.z * mix(vec3(1.), clamp(p - 1., 0., 1.), c.y);
+    }
+
+    void main(){
+      vec2 uv = vUv - 0.5;
+      uv.x *= iResolution.x / max(iResolution.y, 1.0);
+      uv /= iZoom;
+      uv += (0.5 - iCenter);
+
+      // global rotation
+      float s = sin(uRot), c = cos(uRot);
+      uv = mat2(c,-s,s,c) * uv;
+
+      float t = iTime * (0.65 + uFly);
+
+      // warp (cloudy turbulence)
+      vec2 w;
+      w.x = fbm(uv*2.1 + vec2(0.0, t*0.35));
+      w.y = fbm(uv*2.1 + vec2(2.7, -t*0.28));
+      uv += (w - 0.5) * (0.55 * uWarp);
+
+      float r = length(uv);
+      float a = atan(uv.y, uv.x);
+
+      // tunnel depth (center -> far)
+      float z = (1.0 / max(r, 0.02));
+      float twist = uSwirl * 0.35;
+      float phase = z * 0.9 + a * twist + t;
+
+      // base mist
+      float mist = fbm(vec2(a * 1.2, z * 0.22 + t*0.35));
+      float clouds = fbm(uv*3.2 + vec2(t*0.15, -t*0.1));
+      float m = 0.55*mist + 0.45*clouds;
+
+      // rays / streaks
+      float ray = abs(sin(a*14.0 + phase*1.35));
+      ray = pow(ray, mix(4.0, 18.0, clamp(uRays,0.0,2.0) * 0.5));
+      float ray2 = abs(sin(a*29.0 - phase*0.95));
+      ray2 = pow(ray2, 10.0);
+      float rays = (0.65*ray + 0.35*ray2) * (0.35 + 0.8*uRays);
+
+      // color: cyan/blue core with slight magenta
+      float hue = 0.56 + 0.06*sin(phase*0.25) + uHue;
+      float sat = 0.75 + 0.25*m;
+      float bri = 0.12 + 0.88*smoothstep(0.0, 1.0, m);
+      bri += rays;
+
+      // brighten to the center (vortex)
+      float core = smoothstep(1.25, 0.0, r);
+      bri += core * (0.75 + 0.35*fbm(vec2(a*2.0, z*0.2 - t*0.6)));
+
+      vec3 col = hsv2rgb(vec3(fract(hue), sat, clamp(bri, 0.0, 1.3)));
+
+      // fog/vignette
+      float fog = smoothstep(0.25, 1.1, r) * (0.45 + 0.55*uFog);
+      col *= (1.0 - 0.7*fog);
+      col += core * vec3(0.15, 0.25, 0.35);
+
+      // subtle grain
+      float g = hash(vUv*iResolution + iTime) - 0.5;
+      col += g * 0.03;
+
+      fragColor = vec4(col, 1.0);
+    }`;
+
+    function uiVal(id){
+      return parseFloat(document.getElementById(id).value);
+    }
+
+    function ensureCounts(){
+      const wantFrags = Math.floor(uiVal('frags'));
+      while(clockFrags.length < wantFrags) clockFrags.push(makeClockFrag());
+      while(clockFrags.length > wantFrags) clockFrags.pop();
+
+      // stars: keep a little more than frags
+      const wantStars = Math.floor(40 + wantFrags*1.2);
+      while(stars.length < wantStars) stars.push(makeStar());
+      while(stars.length > wantStars) stars.pop();
+    }
+
+    function makeClockFrag(){
+      return {
+        z: random(0.15, 1.0),
+        ang: random(TWO_PI),
+        rad: random(0.05, 0.75),
+        rot: random(TWO_PI),
+        rotSpd: random(-0.02, 0.02),
+        wobble: random(0.4, 1.4),
+        hue: random(0.52, 0.65),
+        crack: random(10, 9999),
+      };
+    }
+
+    function makeStar(){
+      return {
+        z: random(0.1, 1.0),
+        ang: random(TWO_PI),
+        rad: random(0.0, 0.95),
+        size: random(0.6, 2.2),
+        tw: random(0.5, 1.5),
+      };
+    }
+
+    function respawnFrag(f){
+      f.z = random(0.8, 1.2);
+      f.ang = random(TWO_PI);
+      f.rad = random(0.08, 0.8);
+      f.rot = random(TWO_PI);
+      f.rotSpd = random(-0.03, 0.03);
+      f.wobble = random(0.4, 1.4);
+      f.hue = random(0.52, 0.65);
+      f.crack = random(10, 9999);
+    }
+
+    function respawnStar(s){
+      s.z = random(0.9, 1.5);
+      s.ang = random(TWO_PI);
+      s.rad = random(0.0, 1.0);
+      s.size = random(0.6, 2.4);
+      s.tw = random(0.5, 1.5);
+    }
+
+    function setup(){
+      createCanvas(windowWidth, windowHeight, WEBGL);
+      pixelDensity(1);
+      noStroke();
+      center = createVector(0.5, 0.5);
+      tunnelShader = createShader(vert, frag);
+      ensureCounts();
+    }
+
+    function draw(){
+      ensureCounts();
+      zoom = uiVal('zoom');
+      const t = millis()/1000;
+
+      // background tunnel (shader)
+      shader(tunnelShader);
+      tunnelShader.setUniform('iResolution', [width, height]);
+      tunnelShader.setUniform('iTime', t);
+      tunnelShader.setUniform('iCenter', [center.x, center.y]);
+      tunnelShader.setUniform('iZoom', zoom);
+      tunnelShader.setUniform('uFly', uiVal('fly'));
+      tunnelShader.setUniform('uSwirl', uiVal('swirl'));
+      tunnelShader.setUniform('uWarp', uiVal('warp'));
+      tunnelShader.setUniform('uRays', uiVal('rays'));
+      tunnelShader.setUniform('uFog', uiVal('fog'));
+      tunnelShader.setUniform('uHue', uiVal('hue'));
+      tunnelShader.setUniform('uRot', uiVal('rot'));
+
+      beginShape();
+      vertex(-1, -1);
+      vertex( 1, -1);
+      vertex( 1,  1);
+      vertex(-1,  1);
+      endShape(CLOSE);
+
+      // foreground objects
+      resetShader();
+      blendMode(ADD);
+      drawStars(t);
+      drawClockFragments(t);
+      blendMode(BLEND);
+    }
+
+    function drawStars(t){
+      push();
+      translate(-width/2, -height/2);
+      const base = min(width, height);
+      const fly = uiVal('fly');
+      const swirl = uiVal('swirl');
+      for(const s of stars){
+        // move toward viewer
+        s.z -= 0.018 * (0.6 + fly);
+        if(s.z < 0.02) respawnStar(s);
+
+        const depth = pow(1.0 - constrain(s.z, 0, 1), 1.8);
+        const radius = s.rad * (0.15 + 0.85*s.z) * base;
+        const ang = s.ang + swirl * 0.12 * (1.0 - s.z) + t*0.25;
+        const x = width*center.x + cos(ang) * radius;
+        const y = height*center.y + sin(ang) * radius;
+
+        const sz = s.size * (0.5 + 2.2*depth);
+        const a = 35 + 140*depth;
+        noStroke();
+        fill(140, 220, 255, a);
+        ellipse(x, y, sz, sz);
+        // little streak
+        stroke(180, 240, 255, 30 + 90*depth);
+        strokeWeight(1);
+        line(x, y, x - cos(ang)*10*depth, y - sin(ang)*10*depth);
+      }
+      pop();
+    }
+
+    function drawClockFragments(t){
+      push();
+      translate(-width/2, -height/2);
+      const base = min(width, height);
+      const fly = uiVal('fly');
+      const swirl = uiVal('swirl');
+
+      for(const f of clockFrags){
+        f.z -= 0.0065 * (0.65 + fly);
+        if(f.z < 0.02) respawnFrag(f);
+
+        f.rot += f.rotSpd;
+
+        const depth = pow(1.0 - constrain(f.z, 0, 1), 1.7);
+        const radius = f.rad * (0.2 + 0.9*f.z) * base;
+        const ang = f.ang + swirl * 0.25 * (1.0 - f.z) + t*0.35;
+        const wob = 1.0 + 0.15*sin(t*f.wobble + f.crack);
+        const x = width*center.x + cos(ang) * radius;
+        const y = height*center.y + sin(ang) * radius;
+
+        const sc = (0.18 + 1.65*depth) * wob;
+        const size = (28 + 110*randomJitter(f.crack, t*0.1)) * sc;
+
+        // color: bluish-white with a bit of tint
+        const tint = (f.hue + uiVal('hue')) % 1.0;
+        const c1 = colorFromHue(tint, 0.25, 1.0);
+        const c2 = color(210, 245, 255);
+
+        drawClockShard(x, y, size, f.rot, c1, c2, 110*depth);
+      }
+
+      pop();
+    }
+
+    function colorFromHue(h, s, v){
+      // p5 has colorMode(HSB), but we keep RGB mode globally -> convert ourselves
+      const rgb = hsv2rgb_js(h, s, v);
+      return color(rgb[0], rgb[1], rgb[2]);
+    }
+
+    function hsv2rgb_js(h, s, v){
+      const i = Math.floor(h*6);
+      const f = h*6 - i;
+      const p = v*(1-s);
+      const q = v*(1-f*s);
+      const t = v*(1-(1-f)*s);
+      let r,g,b;
+      switch(i%6){
+        case 0: r=v; g=t; b=p; break;
+        case 1: r=q; g=v; b=p; break;
+        case 2: r=p; g=v; b=t; break;
+        case 3: r=p; g=q; b=v; break;
+        case 4: r=t; g=p; b=v; break;
+        case 5: r=v; g=p; b=q; break;
+      }
+      return [255*r, 255*g, 255*b];
+    }
+
+    function randomJitter(seed, x){
+      // deterministic-ish 0..1
+      return fract(Math.sin(seed*12.9898 + x*78.233) * 43758.5453);
+    }
+
+    function rand01(seed){
+      return fract(Math.sin(seed*91.3458) * 47453.5453);
+    }
+
+    function fract(v){
+      return v - Math.floor(v);
+    }
+
+    function drawClockShard(x, y, size, rot, c1, c2, alphaBoost){
+      push();
+      translate(x, y);
+      rotate(rot);
+
+      // glow layers
+      for(let k=3;k>=1;k--){
+        const a = (12 + alphaBoost*0.10) / k;
+        noFill();
+        stroke(red(c2), green(c2), blue(c2), a);
+        strokeWeight(2.2*k);
+        arc(0, 0, size*1.05, size*1.05, -PI*0.85, PI*0.55);
+      }
+
+      // shard outline
+      noFill();
+      stroke(red(c1), green(c1), blue(c1), 60 + alphaBoost*0.25);
+      strokeWeight(1.1);
+      beginShape();
+      for(let i=0;i<8;i++){
+        const ang = map(i, 0, 8, -PI*0.95, PI*0.75);
+        const rr = (0.62 + 0.25*noise(i*10.3, x*0.001, y*0.001)) * (size*0.62);
+        vertex(cos(ang)*rr, sin(ang)*rr);
+      }
+      endShape(CLOSE);
+
+      // broken clock ring
+      stroke(255, 255, 255, 85 + alphaBoost*0.35);
+      strokeWeight(1.25);
+      arc(0, 0, size, size, -PI*0.7, PI*0.35);
+      arc(0, 0, size*0.86, size*0.86, -PI*0.55, PI*0.25);
+
+      // ticks
+      stroke(255, 255, 255, 55 + alphaBoost*0.2);
+      strokeWeight(1);
+      for(let i=0;i<12;i++){
+        const ang = i*TWO_PI/12.0 + 0.5;
+        const r1 = size*0.36;
+        const r2 = size*0.44;
+        // avoid per-frame flicker: use seeded pseudo random
+        const gate = rand01((i+1) * 1000.0 + size * 0.13);
+        if(i%3===0 || gate < 0.35){
+          line(cos(ang)*r1, sin(ang)*r1, cos(ang)*r2, sin(ang)*r2);
+        }
+      }
+
+      // hands
+      const handA = -0.8;
+      const handB = 0.35;
+      stroke(240, 255, 255, 80 + alphaBoost*0.2);
+      strokeWeight(2);
+      line(0, 0, cos(handA)*size*0.22, sin(handA)*size*0.22);
+      strokeWeight(1.6);
+      line(0, 0, cos(handB)*size*0.30, sin(handB)*size*0.30);
+      noStroke();
+      fill(255, 255, 255, 90 + alphaBoost*0.2);
+      ellipse(0, 0, size*0.05, size*0.05);
+
+      pop();
+    }
+
+    function windowResized(){
+      resizeCanvas(windowWidth, windowHeight);
+    }
+
+    function mouseDragged(){
+      const x = constrain(mouseX / width, 0, 1);
+      const y = constrain(mouseY / height, 0, 1);
+      center.set(x, y);
+    }
+
+    function mouseWheel(e){
+      const s = 1 - e.deltaY * 0.001;
+      const z = document.getElementById('zoom');
+      z.value = constrain(parseFloat(z.value) * s, 0.55, 2.4);
+      return false;
+    }
+
+    function keyPressed(){
+      if(key === 'S' || key === 's') saveCanvas('time-machine-space', 'png');
+      if(key === 'H' || key === 'h'){
+        const ui = document.getElementById('ui');
+        ui.style.display = ui.style.display === 'none' ? '' : 'none';
+      }
+    }
+  </script>
+</body>
+</html>
