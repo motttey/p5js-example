@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Document Spotlight Effect</title>
+  <style>
+    html, body { height: 100%; margin: 0; background: #050505; color: #fff; font-family: "serif"; overflow: hidden; }
+    #ui {
+      position: fixed; inset: 12px 12px auto auto;
+      background: rgba(0, 0, 0, 0.7); padding: 16px; border-radius: 8px;
+      backdrop-filter: blur(10px); z-index: 1001; width: 280px;
+    }
+    textarea { width: 100%; height: 80px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 12px; margin-bottom: 10px; resize: none; }
+    .row { display: grid; grid-template-columns: 100px 1fr; gap: 8px; align-items: center; margin: 8px 0; font-size: 12px; }
+    input[type=range] { width: 100%; }
+    h3 { margin: 0 0 10px; font-size: 14px; color: #e0e0e0; border-bottom: 1px solid #444; padding-bottom: 5px; }
+  </style>
+  <script src="https://unpkg.com/p5@1.9.3/lib/p5.min.js"></script>
+</head>
+<body>
+  <div id="ui">
+    <h3>Document Spotlight</h3>
+    <textarea id="textInput" placeholder="Enter your text here..."></textarea>
+    <div class="row"><span>Highlight Line</span><input id="targetLine" type="range" min="0" max="6" step="1" value="2"></div>
+    <div class="row"><span>Beam Width</span><input id="beamWidth" type="range" min="20" max="150" step="1" value="60"></div>
+    <div class="row"><span>Darkness</span><input id="darkness" type="range" min="100" max="255" step="1" value="230"></div>
+  </div>
+
+  <script>
+    let lines = [];
+    let currentY = 0;
+    let targetY = 0;
+    let paperImg;
+
+    function setup() {
+      createCanvas(windowWidth, windowHeight);
+      updateText();
+      currentY = height / 2;
+    }
+
+    function draw() {
+      background(10);
+      
+      // 1. 紙の描画 (ベース)
+      drawPaper();
+
+      // 2. テキストの描画
+      drawText();
+
+      // 3. スポットライト（オーバーレイ）
+      drawSpotlight();
+    }
+
+    function drawPaper() {
+      push();
+      translate(width / 2, height / 2);
+      rectMode(CENTER);
+      noStroke();
+      fill(240, 235, 220); // 古い紙のような色
+      rect(0, 0, 600, 800);
+      
+      // 微細なテクスチャ（ノイズ）
+      for (let i = 0; i < 500; i++) {
+        fill(0, 5);
+        ellipse(random(-300, 300), random(-400, 400), 2, 2);
+      }
+      pop();
+    }
+
+    function drawText() {
+      push();
+      translate(width / 2 - 250, height / 2 - 300);
+      fill(30);
+      textFont('serif');
+      textSize(24);
+      textAlign(LEFT, TOP);
+      
+      let lineHeight = 45;
+      for (let i = 0; i < lines.length; i++) {
+        text(lines[i], 0, i * lineHeight);
+      }
+
+      // ターゲット行の座標計算
+      let targetIdx = parseInt(document.getElementById('targetLine').value);
+      targetY = (height / 2 - 300) + (targetIdx * lineHeight) + 15;
+      
+      // 滑らかな移動 (イージング)
+      currentY = lerp(currentY, targetY, 0.1);
+      pop();
+    }
+
+    function drawSpotlight() {
+      let bWidth = parseInt(document.getElementById('beamWidth').value);
+      let darkAlpha = parseInt(document.getElementById('darkness').value);
+
+      // 上部の暗闇
+      noStroke();
+      fill(0, darkAlpha);
+      rect(0, 0, width, currentY - bWidth/2);
+      
+      // 下部の暗闇
+      rect(0, currentY + bWidth/2, width, height - (currentY + bWidth/2));
+
+      // グラデーションエッジ (光のボケ)
+      for (let i = 0; i < 40; i++) {
+        let alpha = map(i, 0, 40, 0, darkAlpha);
+        // 上のボケ
+        fill(0, alpha);
+        rect(0, currentY - bWidth/2 - i, width, 1.5);
+        // 下のボケ
+        fill(0, alpha);
+        rect(0, currentY + bWidth/2 + i, width, 1.5);
+      }
+
+      // ほんのり暖かい光のレイヤー (ADD合成)
+      blendMode(ADD);
+      noStroke();
+      for(let i = 0; i < 5; i++) {
+        fill(255, 200, 100, 10); 
+        rect(0, currentY - (bWidth/2 + i*2), width, bWidth + i*4);
+      }
+      blendMode(BLEND);
+    }
+
+    function updateText() {
+      let rawText = document.getElementById('textInput').value;
+      lines = rawText.split('\n');
+      document.getElementById('targetLine').max = lines.length - 1;
+    }
+
+    // 入力監視
+    document.getElementById('textInput').addEventListener('input', updateText);
+
+    function windowResized() {
+      resizeCanvas(windowWidth, windowHeight);
+    }
+  </script>
+</body>
+</html>
