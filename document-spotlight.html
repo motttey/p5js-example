@@ -11,7 +11,7 @@
       background: rgba(0, 0, 0, 0.8); padding: 16px; border-radius: 8px;
       backdrop-filter: blur(10px); z-index: 1001; width: 300px;
     }
-    textarea { width: 100%; height: 80px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 12px; margin-bottom: 10px; resize: none; }
+    textarea { width: 100%; height: 100px; background: #222; color: #fff; border: 1px solid #444; border-radius: 4px; font-size: 12px; margin-bottom: 10px; resize: none; }
     .row { display: grid; grid-template-columns: 120px 1fr; gap: 8px; align-items: center; margin: 8px 0; font-size: 12px; }
     input[type=range] { width: 100%; }
     h3 { margin: 0 0 10px; font-size: 14px; color: #e0e0e0; border-bottom: 1px solid #444; padding-bottom: 5px; }
@@ -21,10 +21,12 @@
 <body>
   <div id="ui">
     <h3>Perspective Spotlight</h3>
-    <textarea id="textInput" placeholder="Please Input Text..."></textarea>
-    <div class="row"><span>Highlight Line</span><input id="targetLine" type="range" min="0" max="6" step="1" value="2"></div>
+    <textarea id="textInput" placeholder="文章を入力してください..."></textarea>
+    <div class="row"><span>Highlight Line</span><input id="targetLine" type="range" min="0" max="0" step="1" value="0"></div>
     <div class="row"><span>Beam Width</span><input id="beamWidth" type="range" min="20" max="150" step="1" value="60"></div>
     <div class="row"><span>Darkness</span><input id="darkness" type="range" min="100" max="255" step="1" value="230"></div>
+    <div class="row"><span>Brightness</span><input id="lightBrightness" type="range" min="0" max="255" step="1" value="150"></div>
+    
     <h3>Perspective & Rotation</h3>
     <div class="row"><span>Doc Rot X</span><input id="docRotX" type="range" min="-90" max="90" step="1" value="-30"></div>
     <div class="row"><span>Doc Rot Y</span><input id="docRotY" type="range" min="-90" max="90" step="1" value="10"></div>
@@ -34,21 +36,20 @@
   </div>
 
   <script>
-    let lines = [];
+    let wrappedLines = [];
     let currentY = 0;
     let targetY = 0;
     let textGraphics;
     let spotMaskGraphics;
     let spotLightGraphics;
-    let paperSize = [600, 800];
+    let paperSize = [1000, 1200];
+    let fontSize = 28;
+    let lineHeight = 36;
 
     function setup() {
-      // 1. WEBGLモードでキャンバスを作成
       createCanvas(windowWidth, windowHeight, WEBGL);
       
-      // 2. テキスト用のグラフィックバッファを作成
       textGraphics = createGraphics(paperSize[0], paperSize[1]);
-      textGraphics.background(240, 235, 220);
       spotMaskGraphics = createGraphics(paperSize[0], paperSize[1]);
       spotLightGraphics = createGraphics(paperSize[0], paperSize[1]);
       
@@ -57,162 +58,154 @@
     }
 
     function draw() {
-      background(10);
+      background(5);
       updateTextGraphics();
       
-      // 3. カメラとパースペクティブの設定
       let fovVal = parseInt(document.getElementById('fov').value);
       perspective(radians(fovVal), width/height, 0.1, 7000);
       
-      // 4. ドキュメントの描画 (回転を適用)
-      push();
       let dRotX = parseInt(document.getElementById('docRotX').value);
       let dRotY = parseInt(document.getElementById('docRotY').value);
       let dRotZ = parseInt(document.getElementById('docRotZ').value);
+
+      push();
       rotateX(radians(dRotX));
       rotateY(radians(dRotY));
       rotateZ(radians(dRotZ));
       
-      // テクスチャとしてテキストバッファを貼り付ける
+      // 紙の描画
       texture(textGraphics);
       noStroke();
-      rect(0, 0, paperSize[0], paperSize[1]); // 紙とテキストを描画
+      rect(0, 0, paperSize[0], paperSize[1]);
       pop();
 
-      // 5. スポットライト（オーバーレイ）の描画
+      // ライトの描画
       push();
       rotateX(radians(dRotX));
       rotateY(radians(dRotY));
       rotateZ(radians(dRotZ));
-
       drawSpotlight();
       pop();
     }
 
+    function updateText() {
+      let rawText = document.getElementById('textInput').value;
+      let maxWidth = paperSize[0] - 150; // 左右の余白
+      
+      // テキスト折り返しロジック
+      wrappedLines = [];
+      textGraphics.textSize(fontSize);
+      let paragraphs = rawText.split('\n');
+      
+      for (let p of paragraphs) {
+        let currentLine = "";
+        for (let i = 0; i < p.length; i++) {
+          let char = p[i];
+          let testLine = currentLine + char;
+          if (textGraphics.textWidth(testLine) > maxWidth) {
+            wrappedLines.push(currentLine);
+            currentLine = char;
+          } else {
+            currentLine = testLine;
+          }
+        }
+        wrappedLines.push(currentLine);
+      }
+      
+      // スライダーの最大値を更新
+      document.getElementById('targetLine').max = max(0, wrappedLines.length - 1);
+    }
+
     function updateTextGraphics() {
-      // グラフィックバッファにテキストを描画
-      textGraphics.clear();
-      textGraphics.background(240, 235, 220); // 紙の色
-      textGraphics.fill(30);
+      textGraphics.background(235, 230, 215); 
+      textGraphics.fill(40);
       textGraphics.textFont('serif');
-      textGraphics.textSize(24);
+      textGraphics.textSize(fontSize);
       textGraphics.textAlign(LEFT, TOP);
       
-      let lineHeight = 45;
       textGraphics.push();
-      textGraphics.translate(50, 100);
-      for (let i = 0; i < lines.length; i++) {
-        textGraphics.text(lines[i], 0, i * lineHeight);
+      textGraphics.translate(75, 100);
+      for (let i = 0; i < wrappedLines.length; i++) {
+        textGraphics.text(wrappedLines[i], 0, i * lineHeight);
       }
       textGraphics.pop();
 
-      // ターゲット行の座標計算 (バッファ上の座標)
       let targetIdx = parseInt(document.getElementById('targetLine').value);
-      targetY = 100 + (targetIdx * lineHeight) + 15;
-      
-      // 滑らかな移動 (イージング)
+      targetY = 100 + (targetIdx * lineHeight) + (fontSize/2);
       currentY = lerp(currentY, targetY, 0.1);
     }
 
     function drawSpotlight() {
       let bWidth = parseInt(document.getElementById('beamWidth').value);
       let darkAlpha = parseInt(document.getElementById('darkness').value);
+      let brightVal = parseInt(document.getElementById('lightBrightness').value);
       let lightAngVal = parseInt(document.getElementById('lightAng').value);
-      let blurSize = 70;
+      let blurSize = 80;
 
-      buildSpotlightTextures(bWidth, darkAlpha, lightAngVal, blurSize);
+      buildSpotlightTextures(bWidth, darkAlpha, brightVal, lightAngVal, blurSize);
 
-      // 紙面より少し手前に出して、同一平面のちらつき(z-fighting)を防ぐ
-      translate(0, 0, 1);
+      translate(0, 0, 2); // z-fighting防止
       noStroke();
 
+      // 暗闇マスク
       texture(spotMaskGraphics);
       rect(0, 0, paperSize[0], paperSize[1]);
 
+      // 加算ライト
       blendMode(ADD);
       texture(spotLightGraphics);
       rect(0, 0, paperSize[0], paperSize[1]);
       blendMode(BLEND);
     }
 
-    function buildSpotlightTextures(bWidth, darkAlpha, lightAngVal, blurSize) {
+    function buildSpotlightTextures(bWidth, darkAlpha, brightVal, lightAngVal, blurSize) {
       let cx = paperSize[0] / 2;
-      let beamLength = paperSize[0] * 1.7;
-      let startX = -paperSize[0] * 0.45;
+      let beamLength = paperSize[0] * 2.0;
+      let startX = -paperSize[0] * 0.6;
       let endX = startX + beamLength;
-      let startWidth = bWidth;
-      let endWidth = bWidth * 1.45;
 
+      // 1. マスク（暗闇の中に光の通り道を作る）
       spotMaskGraphics.clear();
       spotMaskGraphics.background(0, darkAlpha);
       spotMaskGraphics.push();
       spotMaskGraphics.translate(cx, currentY);
       spotMaskGraphics.rotate(radians(lightAngVal));
-      spotMaskGraphics.noStroke();
-
-      // 中心はしっかり抜き、外側ほど薄く抜いて柔らかい境界にする
+      
       spotMaskGraphics.erase(255, 0);
-      drawBeamQuad(spotMaskGraphics, startX, endX, startWidth, endWidth);
+      drawBeamQuad(spotMaskGraphics, startX, endX, bWidth, bWidth * 1.5);
       spotMaskGraphics.noErase();
 
-      for (let i = 1; i <= 18; i++) {
-        let t = i / 18;
-        let fadeErase = map(t, 0, 1, 26, 3);
-        spotMaskGraphics.erase(fadeErase, 0);
-        drawBeamQuad(
-          spotMaskGraphics,
-          startX - blurSize * t * 0.2,
-          endX + blurSize * t * 0.7,
-          startWidth + blurSize * t,
-          endWidth + blurSize * t * 1.3
-        );
+      // 境界のボケ
+      for (let i = 1; i <= 15; i++) {
+        let t = i / 15;
+        spotMaskGraphics.erase(map(t, 0, 1, 30, 0), 0);
+        drawBeamQuad(spotMaskGraphics, startX, endX, bWidth + blurSize*t, (bWidth * 1.5) + blurSize*t);
         spotMaskGraphics.noErase();
       }
       spotMaskGraphics.pop();
 
+      // 2. 加算ライト（明るさ調整に対応）
       spotLightGraphics.clear();
       spotLightGraphics.push();
       spotLightGraphics.translate(cx, currentY);
       spotLightGraphics.rotate(radians(lightAngVal));
-      spotLightGraphics.noStroke();
-
-      // 暖色の単色ライト。外側ほど透明にして、斜めに差し込む光だけを足し込む。
-      for (let i = 18; i >= 0; i--) {
-        let t = i / 18;
-        let w1 = startWidth + blurSize * t;
-        let w2 = endWidth + blurSize * t * 1.3;
-        let alpha = map(i, 18, 0, 0, 52);
-        spotLightGraphics.fill(255, 210, 140, alpha);
-        drawBeamQuad(
-          spotLightGraphics,
-          startX - blurSize * t * 0.2,
-          endX + blurSize * t * 0.7,
-          w1,
-          w2
-        );
+      
+      for (let i = 15; i >= 0; i--) {
+        let t = i / 15;
+        // Brightnessスライダーの値をアルファに反映
+        let alpha = map(i, 15, 0, 0, map(brightVal, 0, 255, 0, 80));
+        spotLightGraphics.fill(255, 220, 150, alpha);
+        spotLightGraphics.noStroke();
+        drawBeamQuad(spotLightGraphics, startX, endX, bWidth + blurSize*t, (bWidth * 1.5) + blurSize*t);
       }
       spotLightGraphics.pop();
     }
 
     function drawBeamQuad(g, startX, endX, startWidth, endWidth) {
-      g.quad(
-        startX, -startWidth / 2,
-        endX, -endWidth / 2,
-        endX, endWidth / 2,
-        startX, startWidth / 2
-      );
+      g.quad(startX, -startWidth / 2, endX, -endWidth / 2, endX, endWidth / 2, startX, startWidth / 2);
     }
 
-    function updateText() {
-      let rawText = document.getElementById('textInput').value;
-      lines = rawText.split('\n');
-      document.getElementById('targetLine').max = lines.length - 1;
-      updateTextGraphics(); // テクスチャが変更されたらバッファを更新
-    }
-
-    // 入力監視
     document.getElementById('textInput').addEventListener('input', updateText);
-    document.getElementById('targetLine').addEventListener('input', updateTextGraphics);
 
     function windowResized() {
       resizeCanvas(windowWidth, windowHeight);
